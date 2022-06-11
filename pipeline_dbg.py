@@ -1,11 +1,12 @@
 import argparse
-import gzip
 import multiprocessing as mp
 import os
 import subprocess
 from datetime import datetime
+from pathlib import Path
 
 from Bio import SeqIO
+from typeguard import typechecked
 
 import graph_dataset_dbg
 
@@ -16,28 +17,29 @@ from drosophila_melanogaster import release_6_plus_iso1_mt_chr_lens as chr_lens
 from drosophila_melanogaster import get_chr_dirs, species_specific_dirs, species_reference
 
 
-def validate_chrs(chrs):
+@typechecked
+def validate_chrs(chrs: dict) -> bool:
     diff = set(chrs) - set(get_chr_dirs())
     if len(diff):
         raise Exception(f'Not using valid chromosome name(s): {diff}')
-    return len(diff) == 0
+
+    return True
 
 
-def change_description(file_path, multiline=True):
+@typechecked
+def change_description(file_path : Path, multiline : bool = True):
     new_fasta = []
-    for record in SeqIO.parse(file_path, file_path[-5:]): # 'fasta' for FASTA file, 'fastq' for FASTQ file
+    # TODO: add assertion for format
+    # 'fasta' for FASTA file, 'fastq' for FASTQ file
+    format = file_path.suffix.strip('.').lower()
+    for record in SeqIO.parse(file_path, format=format):
         des = record.description.split(",")
-        id = des[0][5:]
-        if des[1] == "forward":
-            strand = '+'
-        else:
-            strand = '-'
-        position = des[2][9:].split("-")
-        start = position[0]
-        end = position[1]
-        record.id = id
+        record.id = des[0][5:]
+        strand = '+' if des[1] == 'forward' else '-'
+        start, end = des[2][9:].split("-")
         record.description = f'strand={strand}, start={start}, end={end}'
         new_fasta.append(record)
+    
     if multiline:
         SeqIO.write(new_fasta, file_path, "fasta")
     else:
@@ -46,44 +48,49 @@ def change_description(file_path, multiline=True):
         with open(file_path, 'w') as handle:
             handle.writelines(new_fasta)
 
-        
-def create_chr_dirs(pth):
+
+@typechecked        
+def create_chr_dirs(pth : Path):
     for chr_dir in get_chr_dirs():
-        subprocess.run(f'mkdir {chr_dir}', shell=True, cwd=pth)
-        subprocess.run(f'mkdir raw processed info asm_output graphia', shell=True, cwd=os.path.join(pth, f'{chr_dir}'))
+        chr_dir_full = pth / chr_dir
+        os.makedirs(chr_dir_full, exist_ok=True)
+        for subdir in ['mkdir', 'raw', 'processed', 'info', 'asm_output', 'graphia']:
+            os.makedirs(chr_dir_full / subdir, exist_ok=True)
 
 
 # -1. Set up the data file structure
-def file_structure_setup(data_path, ref_path):
+@typechecked
+def file_structure_setup(data_path: Path, ref_path: Path):
     print(f'SETUP::filesystem:: Create directories for storing data')
-    if not os.path.isdir(data_path):
-        os.makedirs(data_path, exist_ok=True)
 
-    if not os.path.isdir(ref_path):
-        os.makedirs(ref_path, exist_ok=True)
+    os.makedirs(data_path, exist_ok=True)
+    os.makedirs(ref_path, exist_ok=True)
 
     species_specific_dirs(ref_path)
 
-    if 'chromosomes' not in os.listdir(ref_path):
-        os.mkdir(os.path.join(ref_path, 'chromosomes'))
-            
-    if 'simulated' not in os.listdir(data_path):
-        os.mkdir(os.path.join(data_path, 'simulated'))
-        create_chr_dirs(os.path.join(data_path, 'simulated'))
-    if 'real' not in os.listdir(data_path):
-        pass
-        #subprocess.run(f'bash download_dataset.sh {data_path}', shell=True)
-        # os.mkdir(os.path.join(data_path, 'real'))
-        # create_chr_dirs(os.path.join(data_path, 'real'))
-    if 'experiments' not in os.listdir(data_path):
-        os.mkdir(os.path.join(data_path, 'experiments'))
+    chromosomes_dir = ref_path / 'chromosomes'
+    os.makedirs(chromosomes_dir, exist_ok=True)
+    simulated_dir = data_path / 'simulated'
+    os.makedirs(simulated_dir, exist_ok=True)
+    create_chr_dirs(simulated_dir)
+
+    real_dir = data_path / 'real'
+    os.makedirs(real_dir, exist_ok=True)
+    create_chr_dirs(real_dir)
+    #subprocess.run(f'bash download_dataset.sh {data_path}', shell=True)
+
+    experiments_dir = data_path / 'experiments'
+    os.makedirs(experiments_dir, exist_ok=True)
 
 
 # 0. Download reference if necessary
-def download_reference(ref_path):
+@typechecked
+def download_reference(ref_path: Path):
     species_reference(ref_path)
 
-def simulate_reads_mp(chr_seq_path, chr_dist_path, chr_save_path, chr_len, i):
+
+@typechecked
+def simulate_reads_mp(chr_seq_path: Path, chr_dist_path: Path, chr_save_path: Path, chr_len, i: int):
     print(f'\nSegment {i}: Simulating reads {chr_save_path}')
     subprocess.run(f'./vendor/seqrequester/build/bin/seqrequester simulate -genome {chr_seq_path} ' \
                     f'-genomesize {chr_len} -coverage 42.4 -distribution {chr_dist_path} > {chr_save_path}',
@@ -92,32 +99,29 @@ def simulate_reads_mp(chr_seq_path, chr_dist_path, chr_save_path, chr_len, i):
 
 
 # 1. Simulate the sequences
-def simulate_reads(data_path, ref_path, chr_dict):
+@typechecked
+def simulate_reads(data_path: Path, ref_path: Path, chr_dict: dict):
     # Dict saying how much of simulated datasets for each chromosome do we need
     # E.g., {'chr1': 4, 'chr6': 2, 'chrX': 4}
-
 
     print(f'SETUP::simulate')
     validate_chrs(chr_dict)
     if 'vendor' not in os.listdir():
-        os.mkdir('vendor')
+        os.makdir('vendor')
     if 'seqrequester' not in os.listdir('vendor'):
         print(f'SETUP::simulate:: Download seqrequester')
         subprocess.run(f'git clone https://github.com/marbl/seqrequester.git', shell=True, cwd='vendor')
         subprocess.run(f'make', shell=True, cwd='vendor/seqrequester/src')
 
-
-    
-
-    data_path = os.path.abspath(data_path)
-    chr_path = os.path.join(ref_path, 'chromosomes')
-    len_path = os.path.join(ref_path, 'lengths')
-    sim_path = os.path.join(data_path, 'simulated')
+    data_path = data_path.resolve()
+    chr_path = ref_path / 'chromosomes'
+    len_path = ref_path / 'lengths'
+    sim_path = data_path / 'simulated'
     simulation_data = []
     for chrN, n_need in chr_dict.items():
         if '_r' in chrN:
             continue
-        chr_raw_path = os.path.join(sim_path, f'{chrN}/raw')
+        chr_raw_path = sim_path / f'{chrN}' / 'raw'
         n_have = len(os.listdir(chr_raw_path))
         if n_need <= n_have:
             continue
@@ -125,16 +129,16 @@ def simulate_reads(data_path, ref_path, chr_dict):
             n_diff = n_need - n_have
             print(f'SETUP::simulate:: Simulate {n_diff} datasets for {chrN}')
             # Simulate reads for chrN n_diff times
-            chr_seq_path = os.path.join(chr_path, f'{chrN}.fasta')
-            chr_dist_path = os.path.join(len_path, f'{chrN}.txt')
-            if not os.path.exists(chr_dist_path):
-                chr_dist_path = os.path.normpath(os.path.join(data_path, '../../defaults/pacbio-hifi-custom.txt'))
-            if not os.path.exists(chr_dist_path):
-                raise FileNotFoundError
+            chr_seq_path = chr_path / f'{chrN}.fasta'
+            chr_dist_path = len_path / f'{chrN}.txt'
+            if not chr_dist_path.exists():
+                chr_dist_path = (data_path / '../../defaults/pacbio-hifi-custom.txt').resolve()
+                if not chr_dist_path.exists():
+                    raise FileNotFoundError
             chr_len = chr_lens[chrN]
             for i in range(n_diff):
                 idx = n_have + i
-                chr_save_path = os.path.join(chr_raw_path, f'{idx}.fasta')
+                chr_save_path = chr_raw_path / f'{idx}.fasta'
                 simulation_data.append((chr_seq_path, chr_dist_path, chr_save_path, chr_len, i))
 
     # leave one processor free
@@ -143,7 +147,8 @@ def simulate_reads(data_path, ref_path, chr_dict):
 
 
 # 2. Generate the graphs
-def generate_graphs(data_path, chr_dict):
+@typechecked
+def generate_graphs(data_path: Path, chr_dict: dict):
     print(f'SETUP::generate')
 
     validate_chrs(chr_dict)
@@ -151,17 +156,17 @@ def generate_graphs(data_path, chr_dict):
     if 'rust-mdbg' not in os.listdir('vendor'):
         print(f'SETUP::generate:: Download rust-mdbg')
         subprocess.run(f'git clone https://github.com/ekimb/rust-mdbg.git', shell=True, cwd='vendor')
-    subprocess.run(f'cargo build --release', shell=True, cwd='vendor/rust-mdbg')
+        subprocess.run(f'cargo build --release', shell=True, cwd='vendor/rust-mdbg')
 
 
-    data_path = os.path.abspath(data_path)
+    data_path = data_path.resolve()
 
     for chrN in chr_dict:
         if '_r' in chrN:
             continue
-        chr_sim_path = os.path.join(data_path, 'simulated', f'{chrN}')
-        chr_raw_path = os.path.join(chr_sim_path, 'raw')
-        chr_prc_path = os.path.join(chr_sim_path, 'processed')
+        chr_sim_path = data_path / 'simulated' / f'{chrN}'
+        chr_raw_path = chr_sim_path / 'raw'
+        chr_prc_path = chr_sim_path / 'processed'
         n_raw = len(os.listdir(chr_raw_path))
         n_prc = len(os.listdir(chr_prc_path))
         n_diff = n_raw - n_prc
@@ -176,19 +181,25 @@ def generate_graphs(data_path, chr_dict):
         graph_dataset_dbg.AssemblyGraphDataset(chr_sim_path, nb_pos_enc=None, specs=specs, generate=True)
 
 
-
-if __name__ == '__main__':
+def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', type=str, default='data', help='Path to directory with simulated and real data')
-    parser.add_argument('--refs', type=str, default='data/references', help='Path to directory with reference information')
+
+    parser.add_argument('--data', type=Path, default='data', help='Path to directory with simulated and real data')
+    parser.add_argument('--refs', type=Path, default='data/references', help='Path to directory with reference information')
     parser.add_argument('--out', type=str, default=None, help='Output name for figures and models')
     parser.add_argument('--overfit', action='store_true', default=False, help='Overfit on the chromosomes in the train directory')
-    parser.add_argument('--species', type=str, default='drosophila_melanogaster', help='Species to analyse')
+    #parser.add_argument('--species', type=str, default='drosophila_melanogaster', help='Species to analyse')
+    parser.add_argument('--species', type=str, default='test_test', help='Species to analyse')
     parser.add_argument('--assembler', type=str, default='rust-mdbg', help='Assembler to use for creating assembly graph')
-    args = parser.parse_args()
 
-    data_path = os.path.join(args.data, args.species)
-    ref_path = os.path.join(args.refs, args.species)
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    data_path = args.data / args.species
+    ref_path = args.refs / args.species
     out = args.out
     overfit = args.overfit
 
