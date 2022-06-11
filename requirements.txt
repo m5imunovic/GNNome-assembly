@@ -32,3 +32,8 @@ tqdm==4.62.2
 
 # rust-dbg
 lz4==4.0.0
+
+#
+hydra-core==1.2.0
+omegaconf==2.2.2
+typeguard===2.12.1

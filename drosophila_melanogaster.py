@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 
 from Bio import Entrez
+from typeguard import typechecked
 
-Entrez.email = "simunovic.marijo@gmail.com"
+Entrez.email = "entrez.user@gmail.com"
 
 REFERENCE_NAME = 'release_6_plus_iso1_mt'
 
@@ -21,6 +23,7 @@ download = {
 }
 
 # download_aws = "https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR11906526/SRR11906526"
+# https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR10238607/SRR10238607
 # source: https://trace.ncbi.nlm.nih.gov/Traces/sra/?run=SRR11906526
 
 
@@ -39,18 +42,20 @@ def get_chr_dirs():
     return list(release_6_plus_iso1_mt_chr_lens.keys())
 
 
-def species_specific_dirs(ref_path):
+@typechecked
+def species_specific_dirs(ref_path: Path):
     if REFERENCE_NAME not in os.listdir(ref_path):
-        os.mkdir(os.path.join(ref_path, REFERENCE_NAME))
+        os.makedirs(ref_path / REFERENCE_NAME, exist_ok=True)
 
 
-def species_reference(ref_path):
-    chr_path = os.path.join(ref_path, 'chromosomes')
+@typechecked
+def species_reference(ref_path: Path):
+    chr_path = ref_path / 'chromosomes'
     chr_dirs = get_chr_dirs()
 
     for chr_dir in chr_dirs:
-        fasta_path = os.path.join(chr_path, f'{chr_dir}.fasta')
-        if os.path.exists(fasta_path):
+        fasta_path = chr_path / f'{chr_dir}.fasta'
+        if fasta_path.exists():
             print(f'Path {fasta_path} already exists. Skipping!')
             continue
         handle = Entrez.efetch(db=download['db'], id=download['accessions'][chr_dir], rettype=download['format'], retmode='text')
