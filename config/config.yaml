@@ -1,0 +1,18 @@
+app: "GNN Assembly Pipeline"
+
+#data: data
+#refs: data/references
+#out: 
+#overfit: False
+
+species: test_test1
+simulator:
+  coverage: 32
+assembler:
+  name: rust-mdbg
+  params:
+    threads: 8
+    density: 0.01
+    k: 31
+    l: 8
+    append:

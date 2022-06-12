@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from Bio import SeqIO
+from hydra import initialize, compose
+from omegaconf import OmegaConf
 from typeguard import typechecked
 
 import graph_dataset_dbg
@@ -13,6 +15,7 @@ import graph_dataset_dbg
 #from homo_sapiens import chm13_chr_lens as chr_lens
 #from homo_sapiens import get_chr_dirs, species_specific_dirs, species_reference
 
+from assembler import assembler_factory
 from drosophila_melanogaster import release_6_plus_iso1_mt_chr_lens as chr_lens
 from drosophila_melanogaster import get_chr_dirs, species_specific_dirs, species_reference
 
@@ -148,17 +151,12 @@ def simulate_reads(data_path: Path, ref_path: Path, chr_dict: dict):
 
 # 2. Generate the graphs
 @typechecked
-def generate_graphs(data_path: Path, chr_dict: dict):
+def generate_graphs(data_path: Path, chr_dict: dict, assembler: dict = {}):
     print(f'SETUP::generate')
 
     validate_chrs(chr_dict)
 
-    if 'rust-mdbg' not in os.listdir('vendor'):
-        print(f'SETUP::generate:: Download rust-mdbg')
-        subprocess.run(f'git clone https://github.com/ekimb/rust-mdbg.git', shell=True, cwd='vendor')
-        subprocess.run(f'cargo build --release', shell=True, cwd='vendor/rust-mdbg')
-
-
+    asm_specs = assembler_factory(assembler['name'], assembler['params'])
     data_path = data_path.resolve()
 
     for chrN in chr_dict:
@@ -171,14 +169,8 @@ def generate_graphs(data_path: Path, chr_dict: dict):
         n_prc = len(os.listdir(chr_prc_path))
         n_diff = n_raw - n_prc
         print(f'SETUP::generate:: Generate {n_diff} graphs for {chrN}')
-        specs = {
-            'threads': 8,
-            'k': 31,
-            'l': 8,
-            'd': 0.001,
-        }
 
-        graph_dataset_dbg.AssemblyGraphDataset(chr_sim_path, nb_pos_enc=None, specs=specs, generate=True)
+        graph_dataset_dbg.AssemblyGraphDataset(chr_sim_path, nb_pos_enc=None, specs=asm_specs, generate=True)
 
 
 def parse_args():
@@ -189,28 +181,36 @@ def parse_args():
     parser.add_argument('--out', type=str, default=None, help='Output name for figures and models')
     parser.add_argument('--overfit', action='store_true', default=False, help='Overfit on the chromosomes in the train directory')
     #parser.add_argument('--species', type=str, default='drosophila_melanogaster', help='Species to analyse')
-    parser.add_argument('--species', type=str, default='test_test', help='Species to analyse')
-    parser.add_argument('--assembler', type=str, default='rust-mdbg', help='Assembler to use for creating assembly graph')
 
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main(config_dir: str, config_name: str):
     args = parse_args()
 
-    data_path = args.data / args.species
-    ref_path = args.refs / args.species
+    initialize(config_path=config_dir, job_name='DBG Pipeline', version_base='1.1')
+    # +var_name=var_value syntax appends to config
+    vargs = [f'+{k}={v}' for k,v in vars(args).items()]
+    # compose but still use args for now until introducing structured config
+    # use hydra only for new config options
+    cfg = compose(config_name=config_name, overrides=vargs)
+
+    data_path = args.data / cfg.species
+    ref_path = args.refs / cfg.species
     out = args.out
-    overfit = args.overfit
 
     time_start = datetime.now()
     timestamp = time_start.strftime('%Y-%b-%d-%H-%M-%S')
     if out is None:
         out = timestamp
 
-
     file_structure_setup(data_path, ref_path)
     download_reference(ref_path)
     chr_dict = { "chr3R" : 1 }
     simulate_reads(data_path, ref_path, chr_dict=chr_dict)
-    generate_graphs(data_path, chr_dict=chr_dict)
+    assembler = OmegaConf.to_container(cfg.assembler)
+    generate_graphs(data_path, chr_dict=chr_dict, assembler=assembler)
+
+
+if __name__ == '__main__':
+    main("config", "config.yaml")

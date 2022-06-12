@@ -1,5 +1,7 @@
 import os
 import subprocess
+from pathlib import Path
+from typing import Optional
 
 import dgl
 from dgl.data import DGLDataset
@@ -28,7 +30,7 @@ class AssemblyGraphDataset(DGLDataset):
         Path to the DNA assembler
     """
 
-    def __init__(self, root, nb_pos_enc=10, specs=None, generate=False):
+    def __init__(self, root: str, specs: dict, nb_pos_enc: int=10, generate: bool=False):
         """
         Parameters
         ----------
@@ -54,9 +56,6 @@ class AssemblyGraphDataset(DGLDataset):
         save_dir = os.path.join(self.root, 'processed')
         self.tmp_dir = os.path.join(self.root, 'asm_output')
         self.info_dir = os.path.join(self.root, 'info')
-        self.assembler_root = os.path.abspath('vendor/rust-mdbg/')
-        self.assembler_path = os.path.join(self.assembler_root, 'target/release/rust-mdbg')
-        self.to_basespace = os.path.join(self.assembler_root, 'utils/complete_gfa.py')
         super().__init__(name='assembly_graphs', raw_dir=raw_dir, save_dir=save_dir)
 
         self.graph_list = []
@@ -86,16 +85,10 @@ class AssemblyGraphDataset(DGLDataset):
 
     def process(self):
         """Process the raw data and save it on the disk."""
-        if self.specs is None:
-            threads = 8
-            k, l, d = 31, 7, 0.01
-        else:
-            threads = self.specs['threads']
-            k, l, d = self.specs['k'], self.specs['l'], self.specs['d']
 
         graphia_dir = os.path.join(self.root, 'graphia')
         if not os.path.isdir(graphia_dir):
-            os.mkdir(graphia_dir)
+            os.makedirs(graphia_dir, exist_ok=True)
 
         print(f'====> ASSEMBLY\n')
 
@@ -107,12 +100,12 @@ class AssemblyGraphDataset(DGLDataset):
             print(f'Step {cnt}: generating graphs for reads in {fastq}')
             reads_path = os.path.abspath(os.path.join(self.raw_dir, fastq))
             print(f'Path to the reads: {reads_path}')
-            print(f'Starting assembler at: {self.assembler_path}')
-            print(f'Parameters: k={k} l={l} d={d} t={threads}')
-            subprocess.run(f'{self.assembler_path} -k {k} -l {l} -d {d} --threads {threads} --prefix {prefix} {reads_path}', shell=True, cwd=self.tmp_dir)
-            to_basespace_path = os.path.join(self.assembler_root, 'utils/complete_gfa.py')
-            subprocess.run(f'python {to_basespace_path} {prefix}. {prefix}.gfa', shell=True, cwd=self.tmp_dir)
-
+            cmd = f'{self.specs["asm_cmd"]} --prefix {prefix} {reads_path}' 
+            print(f'Run command:\n{cmd}')
+            subprocess.run(cmd, shell=True, cwd=self.tmp_dir)
+            cmd = f'python {self.specs["to_basespace_cmd"]} {prefix}. {prefix}.gfa'
+            print(f'Run command:\n{cmd}')
+            subprocess.run(cmd, shell=True, cwd=self.tmp_dir)
             
             print(f'\nAssembler generated the graph! Processing...')
             processed_path = os.path.join(self.save_dir, f'{idx}.dgl')
