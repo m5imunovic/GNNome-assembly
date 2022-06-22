@@ -1,5 +1,7 @@
+import glob
 import os
 import subprocess
+from abc import abstractmethod
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +14,18 @@ def compose_cmd_params(params: dict) -> str:
     cmd_params = ' '.join([f'--{k} {v}' for k, v in params.items()])
     append_params = f' {append}' if 'append' in params and params['append'] is not None else ''
     return cmd_params + append_params
+
+
+@typechecked
+def get_read_files(read_path: Path, pattern: Optional[list[str]] = None) -> list[Path]:
+    if read_path.is_file():
+        return [read_path]
+    else:
+        default_pattern = ['.fasta', '.fa', '.fastq', '.fq']
+        default_pattern += pattern if pattern else []
+        result = [p.resolve() for p in read_path.glob('**/*') if p.suffix in set(default_pattern)]
+        return result
+
 
 
 def setup_rust_mdbg_assembler(vendor_dir: Path) -> Path:
@@ -44,8 +58,57 @@ def rust_mdbg(params: dict, vendor_dir: Path) -> dict:
 
 
 @typechecked
+def setup_la_jolla_assembler(vendor_dir: Path) -> Path:
+    assembler_root = vendor_dir / 'LJA'
+    if not assembler_root.exists():
+        print(f'SETUP::generate:: Download La Jolla Assembler')
+        subprocess.run('git clone https://github.com/AntonBankevich/LJA.git', shell=True, cwd=str(vendor_dir))
+        subprocess.run('cmake .', shell=True, cwd=str(assembler_root))
+        subprocess.run('make -j 8', shell=True, cwd=str(assembler_root))
+
+    return assembler_root
+
+
+@typechecked
+def la_jolla(params: dict, vendor_dir: Path) -> dict:
+    assembler_root = setup_la_jolla_assembler(vendor_dir=vendor_dir)
+    assembler_path = assembler_root / 'bin/lja'
+    if params is None:
+        params = {
+            'threads': 8,
+            'k': 51,
+            'K': 2001,
+        }
+
+    return {
+        'asm_cmd': f'{assembler_path} {compose_cmd_params(params)}'
+    }
+
+
+@typechecked
 def assembler_factory(assembler: str, params: Optional[dict] = None) -> dict:
     vendor_dir: Path = Path('vendor').resolve()
     if assembler == 'rust-mdbg':
         return rust_mdbg(params, vendor_dir=vendor_dir)
+    if assembler == 'LJA':
+        return la_jolla(params, vendor_dir=vendor_dir)
     
+
+class Assembler:
+    def __init__(self, cfg: dict, vendor_dir: Path):
+        self.cfg = cfg
+        self.assembler_root = self._install(vendor_dir)
+
+    @typechecked
+    @abstractmethod
+    def _install(self, vendor_dir: Path):
+        pass
+
+    def pre_assembly_step(self, *args, **kwargs):
+        pass
+
+    def post_assembly_step(self, *args, **kwargs):
+        pass
+
+    def run(raw_path: Path, tmp_path: Path, save_path: Path, *args, **kwargs):
+        pass
