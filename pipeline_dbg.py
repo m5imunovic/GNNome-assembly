@@ -156,7 +156,7 @@ def generate_graphs(data_path: Path, chr_dict: dict, assembler: dict = {}):
 
     validate_chrs(chr_dict)
 
-    asm_specs = assembler_factory(assembler['name'], assembler['params'])
+    assembler = assembler_factory(assembler['name'], assembler['params'])
     data_path = data_path.resolve()
 
     for chrN in chr_dict:
@@ -170,7 +170,7 @@ def generate_graphs(data_path: Path, chr_dict: dict, assembler: dict = {}):
         n_diff = n_raw - n_prc
         print(f'SETUP::generate:: Generate {n_diff} graphs for {chrN}')
 
-        graph_dataset_dbg.AssemblyGraphDataset(chr_sim_path, nb_pos_enc=None, specs=asm_specs, generate=True)
+        graph_dataset_dbg.AssemblyGraphDataset(chr_sim_path, nb_pos_enc=None, assembler=assembler, generate=True)
 
 
 def parse_args():
@@ -206,7 +206,7 @@ def main(config_dir: str, config_name: str):
 
     file_structure_setup(data_path, ref_path)
     download_reference(ref_path)
-    chr_dict = { "chr3R" : 1 }
+    chr_dict = { "chr2R" : 1 }
     simulate_reads(data_path, ref_path, chr_dict=chr_dict)
     assembler = OmegaConf.to_container(cfg.assembler)
     generate_graphs(data_path, chr_dict=chr_dict, assembler=assembler)

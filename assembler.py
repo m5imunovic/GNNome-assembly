@@ -7,13 +7,13 @@ from typing import Optional
 
 from typeguard import typechecked
 
-
 @typechecked
 def compose_cmd_params(params: dict) -> str:
-    append = params.pop('append', None)
-    cmd_params = ' '.join([f'--{k} {v}' for k, v in params.items()])
-    append_params = f' {append}' if 'append' in params and params['append'] is not None else ''
-    return cmd_params + append_params
+    short_params = ' '.join([f'-{k} {v}' for k, v in params['short'].items()]) if 'short' in params else ''
+    long_params = ' '.join([f'--{k} {v}' for k, v in params['long'].items()]) if 'long' in params else ''
+    append_params = f'{params["append"]}' if 'append' in params and params['append'] is not None else ''
+    combined_params = ' '.join([short_params,  long_params,  append_params])
+    return combined_params.strip()
 
 
 @typechecked
@@ -85,15 +85,6 @@ def la_jolla(params: dict, vendor_dir: Path) -> dict:
     }
 
 
-@typechecked
-def assembler_factory(assembler: str, params: Optional[dict] = None) -> dict:
-    vendor_dir: Path = Path('vendor').resolve()
-    if assembler == 'rust-mdbg':
-        return rust_mdbg(params, vendor_dir=vendor_dir)
-    if assembler == 'LJA':
-        return la_jolla(params, vendor_dir=vendor_dir)
-    
-
 class Assembler:
     def __init__(self, cfg: dict, vendor_dir: Path):
         self.cfg = cfg
@@ -110,5 +101,16 @@ class Assembler:
     def post_assembly_step(self, *args, **kwargs):
         pass
 
-    def run(raw_path: Path, tmp_path: Path, save_path: Path, *args, **kwargs):
+    def run(self, raw_path: Path, tmp_path: Path, save_path: Path, *args, **kwargs):
         pass
+
+@typechecked
+def assembler_factory(assembler: str, params: Optional[dict] = None) -> Assembler:
+    vendor_dir: Path = Path('vendor').resolve()
+    if assembler == 'rust-mdbg':
+        from rust_mdbg import RustMDBG
+        return RustMDBG(cfg=params, vendor_dir=vendor_dir)
+    if assembler == 'LJA':
+        from la_jolla import LaJolla
+        return LaJolla(cfg=params, vendor_dir=vendor_dir)
+    

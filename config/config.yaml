@@ -8,9 +8,5 @@ app: "GNN Assembly Pipeline"
 species: test_test1
 simulator:
   coverage: 32
-assembler:
-  name: LJA
-  params:
-    threads: 8
-    k: 31
-    K: 8
+defaults:
+  - assembler: la_jolla

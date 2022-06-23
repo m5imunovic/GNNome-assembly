@@ -8,7 +8,7 @@ from assembler import Assembler, compose_cmd_params, get_read_files
 
 class LaJolla(Assembler):
     @typechecked
-    def _install(vendor_dir: Path) -> Path:
+    def _install(self, vendor_dir: Path) -> Path:
         assembler_root = vendor_dir / 'LJA'
         if not assembler_root.exists():
             print(f'SETUP::generate:: Download La Jolla Assembler')
@@ -30,7 +30,7 @@ class LaJolla(Assembler):
 
     @typechecked
     def run(self, raw_path: Path, tmp_path: Path, save_path: Path, *args, **kwargs):
-        commands = self._construct_exec_cmd(raw_path, save_path)
+        commands = self._construct_exec_cmd(raw_path, tmp_path)
         for cmd in commands:
             subprocess.run(cmd, shell=True)
 

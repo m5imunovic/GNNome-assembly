@@ -5,6 +5,7 @@ from typing import Optional
 
 import dgl
 from dgl.data import DGLDataset
+from assembler import Assembler
 
 
 class AssemblyGraphDataset(DGLDataset):
@@ -30,7 +31,7 @@ class AssemblyGraphDataset(DGLDataset):
         Path to the DNA assembler
     """
 
-    def __init__(self, root: str, specs: dict, nb_pos_enc: int=10, generate: bool=False):
+    def __init__(self, root: str, assembler: Assembler, nb_pos_enc: int=10, generate: bool=False):
         """
         Parameters
         ----------
@@ -46,16 +47,15 @@ class AssemblyGraphDataset(DGLDataset):
             Boolean which, if true, skips computing positional encoding and
             loading of the graphs.
         """
-        self.root = os.path.abspath(root)
-        self.specs = specs
+        self.root = Path(root).resolve()
+        self.assembler = assembler
         required_dirs = ['raw', 'asm_output', 'processed', 'info']
         for required_dir in required_dirs:
-            if required_dir not in os.listdir(self.root):
-                subprocess.run(f'mkdir {required_dir}', shell=True, cwd=self.root)
-        raw_dir = os.path.join(self.root, 'raw')
-        save_dir = os.path.join(self.root, 'processed')
-        self.tmp_dir = os.path.join(self.root, 'asm_output')
-        self.info_dir = os.path.join(self.root, 'info')
+            os.makedirs(self.root / required_dir, exist_ok=True)
+        raw_dir = self.root / 'raw'
+        save_dir = self.root / 'processed'
+        self.tmp_dir = self.root / 'asm_output'
+        self.info_dir = self.root / 'info'
         super().__init__(name='assembly_graphs', raw_dir=raw_dir, save_dir=save_dir)
 
         self.graph_list = []
@@ -92,34 +92,22 @@ class AssemblyGraphDataset(DGLDataset):
 
         print(f'====> ASSEMBLY\n')
 
-        n_have = len(os.listdir(self.save_dir))
-        n_need = len(os.listdir(self.raw_dir))
-        for cnt, idx in enumerate(range(n_have, n_need)):
-            fastq = f'{idx}.fasta'
-            prefix = f'graph_{idx}_{cnt}'
-            print(f'Step {cnt}: generating graphs for reads in {fastq}')
-            reads_path = os.path.abspath(os.path.join(self.raw_dir, fastq))
-            print(f'Path to the reads: {reads_path}')
-            cmd = f'{self.specs["asm_cmd"]} --prefix {prefix} {reads_path}' 
-            print(f'Run command:\n{cmd}')
-            subprocess.run(cmd, shell=True, cwd=self.tmp_dir)
-            cmd = f'python {self.specs["to_basespace_cmd"]} {prefix}. {prefix}.gfa'
-            print(f'Run command:\n{cmd}')
-            subprocess.run(cmd, shell=True, cwd=self.tmp_dir)
+        self.assembler.run(self.raw_dir, self.tmp_dir, self.save_dir)
+
             
-            print(f'\nAssembler generated the graph! Processing...')
-            processed_path = os.path.join(self.save_dir, f'{idx}.dgl')
-            #graph, pred, succ, reads, edges, labels = graph_parser.from_csv(os.path.join(self.tmp_dir, f'{idx}_graph_1.csv'), reads_path)
-            print(f'Parsed assembler output! Saving files...')
+        print(f'\nAssembler generated the graph! Processing...')
+        #processed_path = os.path.join(self.save_dir, f'{idx}.dgl')
+        #graph, pred, succ, reads, edges, labels = graph_parser.from_csv(os.path.join(self.tmp_dir, f'{idx}_graph_1.csv'), reads_path)
+        print(f'Parsed assembler output! Saving files...')
 
-            #dgl.save_graphs(processed_path, graph)
-            #pickle.dump(pred, open(f'{self.info_dir}/{idx}_pred.pkl', 'wb'))
-            #pickle.dump(succ, open(f'{self.info_dir}/{idx}_succ.pkl', 'wb'))
-            #pickle.dump(reads, open(f'{self.info_dir}/{idx}_reads.pkl', 'wb'))
-            #pickle.dump(edges, open(f'{self.info_dir}/{idx}_edges.pkl', 'wb'))
-            #pickle.dump(labels, open(f'{self.info_dir}/{idx}_labels.pkl', 'wb'))
+        #dgl.save_graphs(processed_path, graph)
+        #pickle.dump(pred, open(f'{self.info_dir}/{idx}_pred.pkl', 'wb'))
+        #pickle.dump(succ, open(f'{self.info_dir}/{idx}_succ.pkl', 'wb'))
+        #pickle.dump(reads, open(f'{self.info_dir}/{idx}_reads.pkl', 'wb'))
+        #pickle.dump(edges, open(f'{self.info_dir}/{idx}_edges.pkl', 'wb'))
+        #pickle.dump(labels, open(f'{self.info_dir}/{idx}_labels.pkl', 'wb'))
 
-            #graphia_path = os.path.join(graphia_dir, f'{idx}_graph.txt')
-            #graph_parser.print_pairwise(graph, graphia_path)
-            #print(f'Processing of graph {idx} generated from {fastq} done!\n')
+        #graphia_path = os.path.join(graphia_dir, f'{idx}_graph.txt')
+        #graph_parser.print_pairwise(graph, graphia_path)
+        #print(f'Processing of graph {idx} generated from {fastq} done!\n')
 
