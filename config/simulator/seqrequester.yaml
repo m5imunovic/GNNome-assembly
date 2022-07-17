@@ -1,0 +1,6 @@
+name: seqrequester
+params:
+  long:
+  short:
+    coverage: 42.4
+  append:

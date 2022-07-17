@@ -10,3 +10,4 @@ simulator:
   coverage: 32
 defaults:
   - assembler: la_jolla
+  - simulator: pbsim2

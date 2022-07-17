@@ -18,6 +18,7 @@ import graph_dataset_dbg
 from assembler import assembler_factory
 from drosophila_melanogaster import release_6_plus_iso1_mt_chr_lens as chr_lens
 from drosophila_melanogaster import get_chr_dirs, species_specific_dirs, species_reference
+from simulator import simulator_factory
 
 
 @typechecked
@@ -103,50 +104,15 @@ def simulate_reads_mp(chr_seq_path: Path, chr_dist_path: Path, chr_save_path: Pa
 
 # 1. Simulate the sequences
 @typechecked
-def simulate_reads(data_path: Path, ref_path: Path, chr_dict: dict):
+def simulate_reads(data_path: Path, ref_path: Path, chr_dict: dict, simulator: dict):
     # Dict saying how much of simulated datasets for each chromosome do we need
     # E.g., {'chr1': 4, 'chr6': 2, 'chrX': 4}
 
     print(f'SETUP::simulate')
     validate_chrs(chr_dict)
-    if 'vendor' not in os.listdir():
-        os.makdir('vendor')
-    if 'seqrequester' not in os.listdir('vendor'):
-        print(f'SETUP::simulate:: Download seqrequester')
-        subprocess.run(f'git clone https://github.com/marbl/seqrequester.git', shell=True, cwd='vendor')
-        subprocess.run(f'make', shell=True, cwd='vendor/seqrequester/src')
 
-    data_path = data_path.resolve()
-    chr_path = ref_path / 'chromosomes'
-    len_path = ref_path / 'lengths'
-    sim_path = data_path / 'simulated'
-    simulation_data = []
-    for chrN, n_need in chr_dict.items():
-        if '_r' in chrN:
-            continue
-        chr_raw_path = sim_path / f'{chrN}' / 'raw'
-        n_have = len(os.listdir(chr_raw_path))
-        if n_need <= n_have:
-            continue
-        else:
-            n_diff = n_need - n_have
-            print(f'SETUP::simulate:: Simulate {n_diff} datasets for {chrN}')
-            # Simulate reads for chrN n_diff times
-            chr_seq_path = chr_path / f'{chrN}.fasta'
-            chr_dist_path = len_path / f'{chrN}.txt'
-            if not chr_dist_path.exists():
-                chr_dist_path = (data_path / '../../defaults/pacbio-hifi-custom.txt').resolve()
-                if not chr_dist_path.exists():
-                    raise FileNotFoundError
-            chr_len = chr_lens[chrN]
-            for i in range(n_diff):
-                idx = n_have + i
-                chr_save_path = chr_raw_path / f'{idx}.fasta'
-                simulation_data.append((chr_seq_path, chr_dist_path, chr_save_path, chr_len, i))
-
-    # leave one processor free
-    with mp.Pool(os.cpu_count() - 1) as pool:
-        pool.starmap(simulate_reads_mp, simulation_data)
+    simulator = simulator_factory(simulator['name'], simulator['params'])
+    simulator.run(ref_path, data_path, chr_dict, chr_lens)
 
 
 # 2. Generate the graphs
@@ -206,8 +172,9 @@ def main(config_dir: str, config_name: str):
 
     file_structure_setup(data_path, ref_path)
     download_reference(ref_path)
-    chr_dict = { "chr2R" : 1 }
-    simulate_reads(data_path, ref_path, chr_dict=chr_dict)
+    chr_dict = { "chr2L" : 3 }
+    simulator = OmegaConf.to_container(cfg.simulator)
+    simulate_reads(data_path, ref_path, chr_dict=chr_dict, simulator=simulator)
     assembler = OmegaConf.to_container(cfg.assembler)
     generate_graphs(data_path, chr_dict=chr_dict, assembler=assembler)
 
