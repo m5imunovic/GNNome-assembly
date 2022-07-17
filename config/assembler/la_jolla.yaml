@@ -3,6 +3,6 @@ params:
   long:
     threads: 8
   short:
-    k: 15
-    K: 500
+    k: 501 
+    K: 2001
   append:
