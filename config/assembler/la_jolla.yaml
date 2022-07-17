@@ -1,0 +1,8 @@
+name: LJA
+params:
+  long:
+    threads: 8
+  short:
+    k: 501 
+    K: 2001
+  append:
