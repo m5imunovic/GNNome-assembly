@@ -9,6 +9,7 @@ from Bio import SeqIO
 from hydra import initialize, compose
 from omegaconf import OmegaConf
 from typeguard import typechecked
+from cmd_utils import get_read_files
 
 import graph_dataset_dbg
 
@@ -131,8 +132,8 @@ def generate_graphs(data_path: Path, chr_dict: dict, assembler: dict = {}):
         chr_sim_path = data_path / 'simulated' / f'{chrN}'
         chr_raw_path = chr_sim_path / 'raw'
         chr_prc_path = chr_sim_path / 'processed'
-        n_raw = len(os.listdir(chr_raw_path))
-        n_prc = len(os.listdir(chr_prc_path))
+        n_raw = len(get_read_files(chr_raw_path, ['*.fastq'], override=True))
+        n_prc = len(get_read_files(chr_prc_path, ['*.fastq'], override=True))
         n_diff = n_raw - n_prc
         print(f'SETUP::generate:: Generate {n_diff} graphs for {chrN}')
 

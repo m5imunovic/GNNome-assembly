@@ -4,12 +4,16 @@ from typeguard import typechecked
 
 
 @typechecked
-def get_read_files(read_path: Path, pattern: Optional[list[str]] = None) -> list[Path]:
+def get_read_files(read_path: Path, pattern: Optional[list[str]] = None, override: bool = False) -> list[Path]:
     if read_path.is_file():
         return [read_path]
     else:
         default_pattern = ['.fasta', '.fa', '.fastq', '.fq']
-        default_pattern += pattern if pattern else []
+        if not override:
+            default_pattern += pattern if pattern else []
+        else:
+            assert pattern is not None, "Pattern must be specified when override is True"
+            default_pattern = pattern
         result = [p.resolve() for p in read_path.glob('**/*') if p.suffix in set(default_pattern)]
         return result
 

@@ -2,6 +2,4 @@ name: pbsim2
 params:
   long:
     depth: 20
-    hmm_model: data/P6C4.model
-  short:
-  append:
+    hmm_model: vendor/pbsim2/data/P6C4.model

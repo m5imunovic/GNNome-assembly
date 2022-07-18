@@ -83,7 +83,7 @@ class Seqrequester(Simulator):
             if '_r' in chrN:
                 continue
             chr_raw_path = sim_path / f'{chrN}' / 'raw'
-            n_have = len(os.listdir(chr_raw_path))
+            n_have = len(get_read_files(chr_raw_path, ['.fasta'], override=True))
             if n_need <= n_have:
                 continue
             else:
@@ -100,7 +100,7 @@ class Seqrequester(Simulator):
                 chr_len = chr_lens[chrN]
                 for i in range(n_diff):
                     idx = n_have + i
-                    chr_save_path = chr_raw_path / f'{idx}.fasta'
+                    chr_save_path = chr_raw_path / f'{idx}.fastq'
                     simulation_data.append((chr_seq_path, chr_dist_path, chr_save_path, chr_len, i))
 
             # leave one processor free
@@ -130,29 +130,30 @@ class PbSim2(Simulator):
         return simulator_root
 
     @typechecked
-    def _construct_exec_cmd(self, ref_path: Path) -> list[str]:
-        simulator_path = self.simulator_root / 'src/pbmsim'
-        read_files = get_read_files(ref_path, pattern=['.fasta]'])
+    def _construct_exec_cmd(self, ref_path: Path, chr_save_path: Path, prefix: str) -> list[str]:
+        simulator_path = self.simulator_root / 'src/pbsim'
+        read_files = get_read_files(ref_path, pattern=['.fasta]'], override=True)
         read_params = ' '.join(f'{str(read_file)}' for read_file in read_files)
         option_params = compose_cmd_params(self.cfg)
+        prefix_param = f'--prefix {prefix}'
 
         return [
-            f'{simulator_path} {option_params} {read_params}'
+            f'{simulator_path} {option_params} {prefix_param} {read_params}',
+            f'mv {prefix}_0001.* {chr_save_path}'
         ]
 
     @typechecked
-    def run(self, ref_path: Path, data_path: Path, chr_dict: dict, chr_lens: dict, *args, **kwargs):
+    def run(self, ref_path: Path, data_path: Path, chr_dict: dict, *args, **kwargs):
         data_path = data_path.resolve()
 
         chr_path = ref_path / 'chromosomes'
-        len_path = ref_path / 'lengths'
         sim_path = data_path / 'simulated'
         simulation_data = []
         for chrN, n_need in chr_dict.items():
             if '_r' in chrN:
                 continue
             chr_raw_path = sim_path / f'{chrN}' / 'raw'
-            n_have = len(os.listdir(chr_raw_path))
+            n_have = len(get_read_files(chr_raw_path, pattern=['.fastq'], override=True))
             if n_need <= n_have:
                 continue
             else:
@@ -163,19 +164,19 @@ class PbSim2(Simulator):
                 chr_seq_path = chr_path / f'{chrN}.fasta'
                 for i in range(n_diff):
                     idx = n_have + i
-                    chr_save_path = chr_raw_path / f'{idx}.fasta'
-                    simulation_data.append((chr_seq_path, chr_save_path, i))
+                    chr_save_path = chr_raw_path
+                    simulation_data.append((chr_seq_path, chr_save_path, str(idx), i))
 
             # leave one processor free
             with mp.Pool(os.cpu_count() - 1) as pool:
                 pool.starmap(self.simulate_reads_mp, simulation_data)
 
     @typechecked
-    def simulate_reads_mp(self, chr_seq_path: Path, chr_save_path: Path, i: int):
-        print(f'\nSegment {i}: Simulating reads {chr_save_path}')
-        subprocess.run(f'{self.simulator_root}/src/pbsim --depth 20 --hmm_model {self.simulator_root}/data/P6C4.model ' \
-                        f'{chr_seq_path}',
-                        shell=True, stdout=subprocess.DEVNULL)
+    def simulate_reads_mp(self, chr_seq_path: Path, chr_save_path: Path, prefix: str, i: int):
+        print(f'\nSegment {i}: Simulating reads {chr_seq_path}')
+        commands = self._construct_exec_cmd(chr_seq_path, chr_save_path, prefix)
+        for cmd in commands:
+            subprocess.run(cmd, shell=True)
 
 
 @typechecked
