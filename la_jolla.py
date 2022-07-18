@@ -3,7 +3,8 @@ from pathlib import Path
 
 from typeguard import typechecked
 
-from assembler import Assembler, compose_cmd_params, get_read_files
+from assembler import Assembler
+from cmd_utils import compose_cmd_params, get_read_files
 
 
 class LaJolla(Assembler):
