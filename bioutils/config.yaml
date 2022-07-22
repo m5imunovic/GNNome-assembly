@@ -1,0 +1,4 @@
+species: species_x1 # name of the species and folder where the reference chromosomes are saved
+chromosomes: # dict of chromosome names and lengths
+    chr1: 2000000 
+output_path: data/references/ # path save new species reference
