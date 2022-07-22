@@ -9,6 +9,7 @@ from Bio import SeqIO
 from typeguard import typechecked
 
 from cmd_utils import compose_cmd_params, get_read_files
+from util.path_helpers import get_vendor_path
 
 
 @typechecked
@@ -51,7 +52,7 @@ class Simulator:
     def post_simulation_step(self, *args, **kwargs):
         pass
 
-    def run(self, raw_path: Path, tmp_path: Path, save_path: Path, *args, **kwargs):
+    def run(self, ref_path: Path, data_path: Path, chr_dict: dict, *args, **kwargs):
         pass
 
 
@@ -134,11 +135,12 @@ class PbSim2(Simulator):
         simulator_path = self.simulator_root / 'src/pbsim'
         read_files = get_read_files(ref_path, pattern=['.fasta]'], override=True)
         read_params = ' '.join(f'{str(read_file)}' for read_file in read_files)
-        option_params = compose_cmd_params(self.cfg)
+        option_params = compose_cmd_params(dict(self.cfg['params']))
         prefix_param = f'--prefix {prefix}'
 
         return [
             f'{simulator_path} {option_params} {prefix_param} {read_params}',
+            f'rm {prefix}_0001.ref',
             f'mv {prefix}_0001.* {chr_save_path}'
         ]
 
@@ -173,15 +175,18 @@ class PbSim2(Simulator):
 
     @typechecked
     def simulate_reads_mp(self, chr_seq_path: Path, chr_save_path: Path, prefix: str, i: int):
+        if not chr_save_path.exists():
+            chr_save_path.mkdir(parents=True)
         print(f'\nSegment {i}: Simulating reads {chr_seq_path}')
         commands = self._construct_exec_cmd(chr_seq_path, chr_save_path, prefix)
         for cmd in commands:
+            print(f"Executing command:\n{cmd}")
             subprocess.run(cmd, shell=True)
 
 
 @typechecked
 def simulator_factory(simulator: str, params: Optional[dict] = None) -> Simulator:
-    vendor_dir: Path = Path('vendor').resolve()
+    vendor_dir: Path = get_vendor_path()
     if simulator == 'seqrequester':
         return Seqrequester(cfg=params, vendor_dir=vendor_dir)
     if simulator == 'pbsim2':

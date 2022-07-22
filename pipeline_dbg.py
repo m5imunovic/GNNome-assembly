@@ -17,9 +17,9 @@ import graph_dataset_dbg
 #from homo_sapiens import get_chr_dirs, species_specific_dirs, species_reference
 
 from assembler import assembler_factory
+from bioutils.simulator import simulator_factory
 from drosophila_melanogaster import release_6_plus_iso1_mt_chr_lens as chr_lens
 from drosophila_melanogaster import get_chr_dirs, species_specific_dirs, species_reference
-from simulator import simulator_factory
 
 
 @typechecked

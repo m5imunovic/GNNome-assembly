@@ -179,3 +179,5 @@ cluster_gcn.pkl
 !data/references/lengths/
 data/references/CHM13/
 data/references/chromosomes/
+data/**
+outputs/**
